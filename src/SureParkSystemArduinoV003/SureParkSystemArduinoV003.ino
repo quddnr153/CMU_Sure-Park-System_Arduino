@@ -1,6 +1,20 @@
 #include <Servo.h> 
 #include <Thread.h>
 #include <ThreadController.h>
+#include <SPI.h>
+#include <WiFi.h>
+
+/* socket init */
+#define PORTID 550              // IP socket port ID
+char ssid[] = "ASUS_Guest2";              // The network SSID for CMU unsecure network
+char c;                           // Character read from server
+int status = WL_IDLE_STATUS;      // Network connection status
+IPAddress server(192,168,1,23);  // The server's IP address
+WiFiClient client;                // The client (our) socket
+IPAddress ip;                     // The IP address of the shield
+IPAddress subnet;                 // The IP address of the shield
+long rssi;                        // Wifi shield signal strength
+byte mac[6];                      // Wifi shield MAC address
 
 // ThreadController that will controll all threads which are sendThread and recvThread
 ThreadController controll = ThreadController();
@@ -11,8 +25,6 @@ Thread* sendThread = new Thread();
 Thread recvThread = Thread();
 // Test
 Thread testT = Thread();
-
-
 
 
 #define EntryGateServoPin 5
@@ -58,7 +70,7 @@ int ExitBeamState;
 /* EntryExitBeam define 媛� */
 
 
-// Arduino send data which are whether driver is infront of entry gate or not and on the spot or not to server
+/* Arduino send data which are whether driver is infront of entry gate or not and on the spot or not to server */
 void sendToServer(){
 //  Serial.println("---------------------------------------------");
 //  Serial.print("Send data to Server: ");
@@ -66,15 +78,15 @@ void sendToServer(){
 
   if (ExitBeamState == LOW) { // if ExitBeamState is LOW the beam is broken     
 //    Serial.println("Exit beam broken - Someone comes entry gate.");
-    /* 鍮④컙�벑 �걚怨� �뙆��遺� �궡 */
+    /* Turn on the Green light to exit gate  */
     digitalWrite(ExitGateRedLED, HIGH);
 //    Serial.println( "Turn on entry green LED" );
     digitalWrite(ExitGateGreenLED, LOW);
     
-    /* exit gete �삤�뵂*/
+    /* exit gete open*/
 //    Serial.println( "Open Exit Gate" );    //Here we open the exit gate
     ExitGateServo.write(Open);
-//  delay( delayValue );
+//  delay( delayValue );  
   } else {
 //    Serial.println("Exit beam is not broken. - Nobody is in front on entry gate");
     /* exit gete �겢濡쒖쫰*/
@@ -89,7 +101,7 @@ void sendToServer(){
   Serial.println();
 }
 
-// Arduino receive data which are whether the gate open or not and which spot LED is on or not from server
+/* Arduino receive data which are whether the gate open or not and which spot LED is on or not from server */
 void recvFromServer(){
 //  Serial.println("---------------------------------------------");
 //  Serial.print("Receive data from Server: ");
@@ -124,7 +136,7 @@ void recvFromServer(){
   }
 }
 
-// callback for recvThread
+/* callback for recvThread */
 void boringCallback(){
   Stall1SensorVal = ProximityVal(Stall1SensorPin); //Check parking space 1
   Serial.print("  Stall 1 = ");
@@ -142,6 +154,36 @@ void boringCallback(){
 
 
 void setup(){
+  Serial.begin(9600);
+  
+  Serial.println("Attempting to connect to network...");
+  Serial.print("SSID: ");
+  Serial.println(ssid);
+  
+  // Attempt to connect to Wifi network.
+  while ( status != WL_CONNECTED) 
+  { 
+     Serial.print("Attempting to connect to SSID: ");
+     Serial.println(ssid);
+     status = WiFi.begin(ssid);
+  }  
+   
+  Serial.println( "Connected to network:" );
+  Serial.println( "\n----------------------------------------" );
+
+  // Print the basic connection and network information.
+  printConnectionStatus();
+
+  Serial.println( "\n----------------------------------------\n" );
+
+  Serial.print("\nAttempting to connect to server...");
+  if(client.connect(server, PORTID)){
+    Serial.println("connected");
+  }else{
+    Serial.println("connection fail, so stop the program few sec");
+    delay(100000);
+  }
+  
   InitEntryExitLEDs();   // You have to do this to turn off the entry LEDs
 
   pinMode(EntryBeamRcvr, INPUT);     // Make entry IR rcvr an input
@@ -175,8 +217,6 @@ void setup(){
   EntryGateServo.attach(EntryGateServoPin);
   ExitGateServo.attach(ExitGateServoPin);
 
-  Serial.begin(9600);
-
   // Configure sendThread
   sendThread->onRun(recvFromServer);
   sendThread->setInterval(100);
@@ -203,11 +243,8 @@ void setup(){
 
   /* �꽱�꽌 泥댄겕*/
   Stall1SensorVal = ProximityVal(Stall1SensorPin); //Check parking space 1
-  
   Stall2SensorVal = ProximityVal(Stall2SensorPin); //Check parking space 2
-
   Stall3SensorVal = ProximityVal(Stall3SensorPin); //Check parking space 3
-
   Stall4SensorVal =  ProximityVal(Stall4SensorPin); //Check parking space 4
 }
 
@@ -258,4 +295,43 @@ void InitEntryExitLEDs()
     digitalWrite(i, HIGH);
   }
 }
+
+/************************************************************************************************
+* The following method prints out the connection information
+************************************************************************************************/
+
+void printConnectionStatus() 
+{
+  // Print the basic connection and network information: Network, IP, and Subnet mask
+  ip = WiFi.localIP();
+  Serial.print("Connected to ");
+  Serial.print(ssid);
+  Serial.print(" IP Address:: ");
+  Serial.println(ip);
+  subnet = WiFi.subnetMask();
+  Serial.print("Netmask: ");
+  Serial.println(subnet);
+   
+  // Print our MAC address.
+  WiFi.macAddress(mac);
+  Serial.print("WiFi Shield MAC address: ");
+  Serial.print(mac[5],HEX);
+  Serial.print(":");
+  Serial.print(mac[4],HEX);
+  Serial.print(":");
+  Serial.print(mac[3],HEX);
+  Serial.print(":");
+  Serial.print(mac[2],HEX);
+  Serial.print(":");
+  Serial.print(mac[1],HEX);
+  Serial.print(":");
+  Serial.println(mac[0],HEX);
+   
+  // Print the wireless signal strength:
+  rssi = WiFi.RSSI();
+  Serial.print("Signal strength (RSSI): ");
+  Serial.print(rssi);
+  Serial.println(" dBm");
+
+} // printConnectionStatus
 
