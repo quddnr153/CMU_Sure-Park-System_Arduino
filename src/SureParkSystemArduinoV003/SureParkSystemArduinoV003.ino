@@ -4,7 +4,7 @@
 #include <SPI.h>
 #include <WiFi.h>
 
-/* socket init */
+// socket define
 #define PORTID 550              // IP socket port ID
 char ssid[] = "ASUS_Guest2";              // The network SSID for CMU unsecure network
 char c;                           // Character read from server
@@ -23,34 +23,27 @@ ThreadController controll = ThreadController();
 Thread* sendThread = new Thread();
 // Receive Thread (not pointer)
 Thread recvThread = Thread();
-// Test
-Thread testT = Thread();
 
-
+// GateSerrvo define
 #define EntryGateServoPin 5
 #define ExitGateServoPin 6
 #define Open  90
 #define Close 0
-
 int delayValue = 100;
 Servo EntryGateServo;
 Servo ExitGateServo;
-/*  GateLiftTest define 媛�  */
 
-
-/* ParkingStallSensor define 媛� */
+// ParkingStallSensor define
 #define Stall1SensorPin 30
 #define Stall2SensorPin 31
 #define Stall3SensorPin 32
 #define Stall4SensorPin 33
-
 long  Stall1SensorVal;
 long  Stall2SensorVal;
 long  Stall3SensorVal;
 long  Stall4SensorVal;
-/* ParkingStallSensor define 媛� */
 
-/* LED test define 媛�*/
+// LED test define
 #define EntryGateGreenLED 26
 #define EntryGateRedLED   27
 #define ExitGateGreenLED  28
@@ -59,99 +52,140 @@ long  Stall4SensorVal;
 #define ParkingStall2LED  23
 #define ParkingStall3LED  24
 #define ParkingStall4LED  25
-/* LED test define 媛�*/
 
-/* EntryExitBeam define 媛� */
+// EntryExitBeam define
 #define EntryBeamRcvr  34 
 #define ExitBeamRcvr   35
-
 int EntryBeamState;
 int ExitBeamState;
-/* EntryExitBeam define 媛� */
 
+// Parking status chk boolean
+bool space1 = false;
+bool space2 = false;
+bool space3 = false;
+bool space4 = false;
 
 /* Arduino send data which are whether driver is infront of entry gate or not and on the spot or not to server */
 void sendToServer(){
-//  Serial.println("---------------------------------------------");
-//  Serial.print("Send data to Server: ");
+  EntryBeamState = digitalRead(EntryBeamRcvr);  // Here we read the state of the entry beam.
   ExitBeamState = digitalRead(ExitBeamRcvr);  // Here we read the state of the exit beam.
 
-  if (ExitBeamState == LOW) { // if ExitBeamState is LOW the beam is broken     
-//    Serial.println("Exit beam broken - Someone comes entry gate.");
-    /* Turn on the Green light to exit gate  */
-    digitalWrite(ExitGateRedLED, HIGH);
-//    Serial.println( "Turn on entry green LED" );
-    digitalWrite(ExitGateGreenLED, LOW);
-    
-    /* exit gete open*/
-//    Serial.println( "Open Exit Gate" );    //Here we open the exit gate
-    ExitGateServo.write(Open);
-//  delay( delayValue );  
-  } else {
-//    Serial.println("Exit beam is not broken. - Nobody is in front on entry gate");
-    /* exit gete �겢濡쒖쫰*/
-//    Serial.println( "Close Exit Gate" );   //Here we close the exit gate
-    ExitGateServo.write(Close);
-    /* �뙆��遺� �걚怨� 鍮④컙�벑 �궡 */
-    digitalWrite(ExitGateGreenLED, HIGH);
-//    Serial.println( "Turn on entry green LED" );
-    digitalWrite(ExitGateRedLED, LOW);  
+  // Stall sensor data
+  Stall1SensorVal = ProximityVal(Stall1SensorPin); //Check parking space 1
+  Stall2SensorVal = ProximityVal(Stall2SensorPin); //Check parking space 2
+  Stall3SensorVal = ProximityVal(Stall3SensorPin); //Check parking space 3
+  Stall4SensorVal =  ProximityVal(Stall4SensorPin); //Check parking space 4
+
+  // send protocol of whether driver is in front of enrty gate or not
+  if (EntryBeamState == LOW) { // if EntryBeamState is LOW the beam is broken
+    Serial.println("Driver is in front of Entry gate.");
+    client.println("1");
+    // turn on the entry gate LED -> YELLOW for ready sign to enter the gate
+    digitalWrite(EntryGateRedLED, LOW);
+    digitalWrite(EntryGateGreenLED, LOW);
+  } else { // Driver enter the parking lot or nobody is in front of entry gate
+    EntryGateServo.write(Close);
+    // turn on the exit gate LED -> RED
+    digitalWrite(EntryGateRedLED, LOW);
+    digitalWrite(EntryGateGreenLED, HIGH);
   }
-//  Serial.println("---------------------------------------------");
-  Serial.println();
+
+  // send protocol of whether driver is in front of exit gate or not
+  if (ExitBeamState == LOW) { // if ExitBeamState is LOW the beam is broken
+    Serial.println("Driver is in front of Exit gate.");
+    client.println("2");
+    // turn on the exit gate LED -> YELLOW for ready sign to leave the exit gate
+    digitalWrite(ExitGateRedLED, LOW);
+    digitalWrite(ExitGateGreenLED, LOW);
+  } else { // Driver out or noboday is in front of exit gate
+    ExitGateServo.write(Close);
+    // turn on the exit gate LED -> RED
+    digitalWrite(ExitGateRedLED, LOW);
+    digitalWrite(ExitGateGreenLED, HIGH);
+  }
+
+  // Checking thet whether the driver parked righit space or not
+  if (Stall1SensorVal < 100) { // PARKING SPACE 1
+    if (!space1) {
+      space1 = true;
+      client.println("a");
+    }
+    turnOffParkingLEDs();
+  } else {
+    if (space1) space1 = false;
+  }
+  if (Stall2SensorVal < 100) { // PARKING SPACE 2
+    if (!space2) {
+      space2 = true;
+      client.println("b");
+    }
+    turnOffParkingLEDs();
+  } else {
+    if (space2) space2 = false;
+  }
+  if (Stall3SensorVal < 100) { // PARKING SPACE 3
+    if (!space3) {
+      space3 = true;
+      client.println("c");
+    }
+    turnOffParkingLEDs();
+  } else {
+    if (space3) space3 = false;
+  }
+  if (Stall4SensorVal < 100) { // PARKING SPACE 4
+    if (!space4) {
+      space4 = true;
+      client.println("d");
+    }
+    turnOffParkingLEDs();
+  } else {
+    if (space4) space4 = false;
+  }
 }
 
 /* Arduino receive data which are whether the gate open or not and which spot LED is on or not from server */
 void recvFromServer(){
-//  Serial.println("---------------------------------------------");
-//  Serial.print("Receive data from Server: ");
-//  Serial.println(millis());
-  
-  EntryBeamState = digitalRead(EntryBeamRcvr);  // Here we read the state of the entry beam.
+  char c = ' ';
+  Serial.print("Local server send message : ");
+  while (c != '\n') {
+    if (client.available()) {
+      c = client.read();
+      Serial.write(c);
+    }
+  }
 
-  if (EntryBeamState == LOW) { // if EntryBeamState is LOW the beam is broken
-//    Serial.println("Entry beam broken");
-    /* 鍮④컙�벑 �걚怨� �뙆��遺� �궡 */
-    digitalWrite(EntryGateRedLED, HIGH);
-//    Serial.println( "Turn on entry green LED" );
-    digitalWrite(EntryGateGreenLED, LOW);
-
-    /* entry gete �삤�뵂*/
-//    Serial.println( "Open Entry Gate" );   //Here we open the entry gate
+  // receiving date abot entry gate and parking space LED
+  if ((c == '3') && (EntryBeamState == LOW)) { // recv the msg which is '3' from server - open the entry gate and turn on the First LED
     EntryGateServo.write(Open);
-//  delay( delayValue );
-    
-    /* 1踰� �꽱�꽌 耳�*/
-//    Serial.println( "Turn on stall 1 LED" );
+    // turn on the entry gate LED -> GREEN for entering sign to enter the gate
+    digitalWrite(EntryGateRedLED, HIGH);
+    digitalWrite(EntryGateGreenLED, LOW);
     digitalWrite(ParkingStall1LED, HIGH);
-  } else {
-//    Serial.println("Entry beam is not broken.");
-    /* entry gete �겢濡쒖쫰*/
-//    Serial.println( "Close Entry Gate" );  //Here we close the entry gate
-    EntryGateServo.write(Close);
-    
-    /* �뙆��遺� �걚怨� 鍮④컙�벑 �궡 */
-    digitalWrite(EntryGateGreenLED, HIGH);
-    digitalWrite(EntryGateRedLED, LOW);
+  } else if ((c == '4') && (EntryBeamState == LOW)) { // recv the msg which is '4' from server - open the entry gate and turn on the Second LED
+    // turn on the entry gate LED -> GREEN for entering sign to enter the gate
+    digitalWrite(EntryGateRedLED, HIGH);
+    digitalWrite(EntryGateGreenLED, LOW);
+    digitalWrite(ParkingStall2LED, HIGH);
+  } else if ((c == '5') && (EntryBeamState == LOW)) { // recv the msg which is '5' from server - open the entry gate and turn on the Third LED
+    // turn on the entry gate LED -> GREEN for entering sign to enter the gate
+    digitalWrite(EntryGateRedLED, HIGH);
+    digitalWrite(EntryGateGreenLED, LOW);
+    digitalWrite(ParkingStall3LED, HIGH);
+  } else if ((c == '6') && (EntryBeamState == LOW)) { // recv the msg which is '6' from server - open the entry gate and turn on the Forth LED
+    // turn on the entry gate LED -> GREEN for entering sign to enter the gate
+    digitalWrite(EntryGateRedLED, HIGH);
+    digitalWrite(EntryGateGreenLED, LOW);
+    digitalWrite(ParkingStall4LED, HIGH);
+  }
+
+  // receiving date abot exit gate
+  if ((c == '7') && (ExitBeamState == LOW)) { // rect the msg which is '7' from server - open the exit gate
+    ExitGateServo.write(Open);
+    // turn on the exit gate LED -> GREEN
+    digitalWrite(ExitGateRedLED, HIGH);
+    digitalWrite(ExitGateGreenLED, LOW);
   }
 }
-
-/* callback for recvThread */
-void boringCallback(){
-  Stall1SensorVal = ProximityVal(Stall1SensorPin); //Check parking space 1
-  Serial.print("  Stall 1 = ");
-  Serial.println(Stall1SensorVal);
-  Stall2SensorVal = ProximityVal(Stall2SensorPin); //Check parking space 2
-
-  Stall3SensorVal = ProximityVal(Stall3SensorPin); //Check parking space 3
-
-  Stall4SensorVal =  ProximityVal(Stall4SensorPin); //Check parking space 4
-  if(Stall1SensorVal<100) {
-    Serial.println( "Turn off stall 1 LED" );
-    digitalWrite(ParkingStall1LED, LOW);
-    }
-}
-
 
 void setup(){
   Serial.begin(9600);
@@ -159,29 +193,24 @@ void setup(){
   Serial.println("Attempting to connect to network...");
   Serial.print("SSID: ");
   Serial.println(ssid);
-  
   // Attempt to connect to Wifi network.
   while ( status != WL_CONNECTED) 
   { 
      Serial.print("Attempting to connect to SSID: ");
      Serial.println(ssid);
      status = WiFi.begin(ssid);
-  }  
-   
+  }
   Serial.println( "Connected to network:" );
   Serial.println( "\n----------------------------------------" );
-
   // Print the basic connection and network information.
   printConnectionStatus();
-
   Serial.println( "\n----------------------------------------\n" );
-
   Serial.print("\nAttempting to connect to server...");
+  
   if(client.connect(server, PORTID)){
     Serial.println("connected");
   }else{
-    Serial.println("connection fail, so stop the program few sec");
-    delay(100000);
+    // need to delay ??
   }
   
   InitEntryExitLEDs();   // You have to do this to turn off the entry LEDs
@@ -192,7 +221,7 @@ void setup(){
   pinMode(ExitBeamRcvr, INPUT);      // Make exit IR rcvr an input
   digitalWrite(ExitBeamRcvr, HIGH);  // enable the built-in pullup
 
-  /* LED 媛� 珥덇린�솕*/
+  // LED initiation
   pinMode(EntryGateGreenLED, OUTPUT);    // This section makes all the LED pins outputs.
   pinMode(EntryGateRedLED, OUTPUT);
   pinMode(ExitGateGreenLED, OUTPUT);
@@ -201,47 +230,39 @@ void setup(){
   pinMode(ParkingStall2LED, OUTPUT);
   pinMode(ParkingStall3LED, OUTPUT);
   pinMode(ParkingStall4LED, OUTPUT);
-
   digitalWrite(EntryGateGreenLED, HIGH);  // The gate LEDs are turned off by setting their pins
   digitalWrite(EntryGateRedLED, LOW);    // high. The reason for this is that they are
   digitalWrite(ExitGateGreenLED, HIGH);   // 3 color LEDs with a common annode (+). So setting
   digitalWrite(ExitGateRedLED, LOW);     // any of the other 3 legs low turns on the LED.
-  
   digitalWrite(ParkingStall1LED, LOW);    // Standard LEDs are used for the parking stall
   digitalWrite(ParkingStall2LED, LOW);    // LEDs. Set the pin high and they light.
   digitalWrite(ParkingStall3LED, LOW);
   digitalWrite(ParkingStall4LED, LOW);
-  /* LED 媛� 珥덇린�솕*/
 
   // Map servo to pin(gatelifttest)
   EntryGateServo.attach(EntryGateServoPin);
   ExitGateServo.attach(ExitGateServoPin);
 
+  // Thread configuration
   // Configure sendThread
   sendThread->onRun(recvFromServer);
   sendThread->setInterval(100);
-
+  
   // Configure sendThread
-  recvThread.onRun(boringCallback);
+  recvThread.onRun(recvFromServer);
   recvThread.setInterval(100);
-
-  // test t
-  testT.onRun(sendToServer);
-  testT.setInterval(100);
-
+  
   // Adds both threads to the controller
   controll.add(sendThread);
   controll.add(&recvThread); // & to pass the pointer to it
-  controll.add(&testT);
 
-
-  /* gete 珥덇린�솕*/
+  // Gate close initiation
   Serial.println( "Close Both Gates" );  //Here we close both gates
   EntryGateServo.write(Close); 
   ExitGateServo.write(Close);  
 //  delay( delayValue );
 
-  /* �꽱�꽌 泥댄겕*/
+  // Stall sensor data
   Stall1SensorVal = ProximityVal(Stall1SensorPin); //Check parking space 1
   Stall2SensorVal = ProximityVal(Stall2SensorPin); //Check parking space 2
   Stall3SensorVal = ProximityVal(Stall3SensorPin); //Check parking space 3
@@ -259,17 +280,17 @@ void loop(){
   h/=2;
 }
 
-/* ParkingStallSensor�뿉�꽌 �벐�뒗 �븿�닔*/
+/* ParkingStallSensor read */
 long ProximityVal(int Pin)
 {
   long duration = 0;
   pinMode(Pin, OUTPUT);         // Sets pin as OUTPUT
   digitalWrite(Pin, HIGH);      // Pin HIGH
-    delay(1);                     // Wait for the capacitor to stabilize
+  delay(1);                     // Wait for the capacitor to stabilize
 
   pinMode(Pin, INPUT);          // Sets pin as INPUT
   digitalWrite(Pin, LOW);       // Pin LOW
-  while(digitalRead(Pin)){       // Count until the pin goes LOW (cap discharges)
+  while (digitalRead(Pin)) {    // Count until the pin goes LOW (cap discharges)
     duration++;
   }
   return duration;              // Returns the duration of the pulse
@@ -334,4 +355,13 @@ void printConnectionStatus()
   Serial.println(" dBm");
 
 } // printConnectionStatus
+
+/* Turn off the parking LEDs */
+void turnOffParkingLEDs()
+{
+  digitalWrite(ParkingStall1LED, LOW);
+  digitalWrite(ParkingStall2LED, LOW);
+  digitalWrite(ParkingStall3LED, LOW);
+  digitalWrite(ParkingStall4LED, LOW);
+}
 
