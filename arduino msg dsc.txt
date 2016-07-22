@@ -1,0 +1,12 @@
+1 -> entry gate에 driver가 왔다.
+2 -> exit gate에 driver가 왔다.
+3 -> driver 승인 완료 entry gate 문열고, 1번 주차공간 LED 키기
+4 -> driver 승인 완료 entry gate 문열고, 2번 주차공간 LED 키기
+5 -> driver 승인 완료 entry gate 문열고, 3번 주차공간 LED 키기
+6 -> driver 승인 완료 entry gate 문열고, 4번 주차공간 LED 키기
+7 -> driver 승인 완료 exit gate 문열기
+
+a -> driver가 parking space 1에 주차를 했다.
+b -> driver가 parking space 2에 주차를 했다.
+c -> driver가 parking space 3에 주차를 했다.
+d -> driver가 parking space 4에 주차를 했다.
