@@ -78,6 +78,10 @@ long  Stall2SensorVal;
 long  Stall3SensorVal;
 long  Stall4SensorVal;
 long  StallSVal = 25;
+char stall1[11] = "0000000002";
+char stall2[11] = "0000000003";
+char stall3[11] = "0000000004";
+char stall4[11] = "0000000005";
 
 // LED test define
 #define EntryGateGreenLED 26
@@ -105,6 +109,25 @@ bool space2 = false;
 bool space3 = false;
 bool space4 = false;
 
+/*********************************************************************
+* void sendToServer()
+*
+* Parameters: None           
+* 
+* Description:
+* The goal of the fucntion is to send status of parking lot to Local server.
+* To be specifc, status are following:
+* '1' means that the driver is in front of Entry gate.
+* '2' means that the driver is in front of Exit gate.
+* 'a' means that the driver parked on the parking space 1.
+* 'b' means that the driver parked on the parking space 2.
+* 'c' means that the driver parked on the parking space 3.
+* 'd' means that the driver parked on the parking space 4.
+* 'e' means that the driver leaved on the parking space 1.
+* 'f' means that the driver leaved on the parking space 2.
+* 'g' means that the driver leaved on the parking space 3.
+* 'h' means that the driver leaved on the parking space 4.
+***********************************************************************/
 /* Arduino send data which are whether driver is infront of entry gate or not and on the spot or not to server */
 void sendToServer(){
   EntryBeamState = digitalRead(EntryBeamRcvr);  // Here we read the state of the entry beam.
@@ -154,7 +177,7 @@ void sendToServer(){
   if (Stall1SensorVal < StallSVal && !entryGateB) { // PARKING SPACE 1
     if (!space1) {
       space1 = true;
-      client.println("a");
+      client.println(stall1);
       Serial.println("The driver parked on the parking space 1.");
       turnOffParkingLEDs();
     }
@@ -168,7 +191,7 @@ void sendToServer(){
   if (Stall2SensorVal < StallSVal && !entryGateB) { // PARKING SPACE 2
     if (!space2) {
       space2 = true;
-      client.println("b");
+      client.println(stall2);
       Serial.println("The driver parked on the parking space 2.");
       turnOffParkingLEDs();
     }
@@ -182,7 +205,7 @@ void sendToServer(){
   if (Stall3SensorVal < StallSVal && !entryGateB) { // PARKING SPACE 3
     if (!space3) {
       space3 = true;
-      client.println("c");
+      client.println(stall3);
       Serial.println("The driver parked on the parking space 3.");
       turnOffParkingLEDs();
     }
@@ -196,7 +219,7 @@ void sendToServer(){
   if (Stall4SensorVal < StallSVal && !entryGateB) { // PARKING SPACE 4
     if (!space4) {
       space4 = true;
-      client.println("d");
+      client.println(stall4);
       Serial.println("The driver parked on the parking space 4.");
       turnOffParkingLEDs();
     }
@@ -209,7 +232,20 @@ void sendToServer(){
   }
 }
 
-/* Arduino receive data which are whether the gate open or not and which spot LED is on or not from server */
+/*********************************************************************
+* void recvFromServer()
+*
+* Parameters: None           
+* 
+* Description:
+* The goal of the fucntion is to receive commands from Local server.
+* To be specifc, commands are following:
+* '3' is to open the entry gate and turn on the First LED
+* '4' is to open the entry gate and turn on the Second LED
+* '5' is to open the entry gate and turn on the Third LED
+* '6' is to open the entry gate and turn on the Fourth LED
+* '7' is to open the exit gate
+***********************************************************************/ 
 void recvFromServer(){
   char tmp = ' ';
   char c = ' ';
@@ -354,10 +390,39 @@ void setup(){
   Stall2SensorVal = ProximityVal(Stall2SensorPin); //Check parking space 2
   Stall3SensorVal = ProximityVal(Stall3SensorPin); //Check parking space 3
   Stall4SensorVal =  ProximityVal(Stall4SensorPin); //Check parking space 4
+
+  // Send client register information to localServer
+  // (parkingContollerDeviceID,parkingContollerDeviceType,parkingContollerDeviceAlive,parkingContollerDeviceState,parkingContollerID)
+  client.println("0000000000,1,1,1,0000000000");
+  client.println("0000000000,2,1,1,0000000001");
+  client.println("0000000000,3,1,1,0000000002");
+  client.println("0000000000,3,1,1,0000000003");
+  client.println("0000000000,3,1,1,0000000004");
+  client.println("0000000000,3,1,1,0000000005");
 }
 
 void loop(){
-  sendToServer();
+  /*
+   * WiFi connection check every time
+   */
+   if (client.connected()) {
+    sendToServer();
+   } else {
+     Serial.println();
+     Serial.println("Discoonecting.");
+     /*
+      *  Do something like open the gates
+     */
+     EntryGateServo.write(Open); 
+     ExitGateServo.write(Open);  
+     client.stop();
+     if(client.connect(server, PORTID)){
+       Serial.println("connected");
+     }else{
+       // need to delay ??
+     }
+//     for(;;);
+   }
 }
 
 /*********************************************************************
@@ -416,7 +481,6 @@ void InitEntryExitLEDs()
 /************************************************************************************************
 * The following method prints out the connection information
 ************************************************************************************************/
-
 void printConnectionStatus() 
 {
   // Print the basic connection and network information: Network, IP, and Subnet mask
@@ -452,7 +516,14 @@ void printConnectionStatus()
 
 } // printConnectionStatus
 
-/* Turn off the parking LEDs */
+/*********************************************************************
+* void turnOffParkingLEDs()
+*
+* Parameters: None           
+* 
+* Description:
+* Turn off all parking LEDs
+***********************************************************************/ 
 void turnOffParkingLEDs()
 {
   digitalWrite(ParkingStall1LED, LOW);
