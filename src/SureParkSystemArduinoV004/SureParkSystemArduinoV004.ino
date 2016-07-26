@@ -5,6 +5,7 @@
  * versions:
  * 1.0 July 20, 2016 - Initial version
  * 2.0 July 22, 2016 - Interim version
+ * 3.0 July 26, 2016 - Interim version
  * 
  * Description:
  * 
@@ -52,7 +53,7 @@
 char ssid[] = "ASUS_Guest2";           // The network SSID for CMU unsecure network
 char c;                               // Character read from server
 int status = WL_IDLE_STATUS;         // Network connection status
-IPAddress server(192,168,1,23);    // The server's IP address
+IPAddress server(192,168,1,80);    // The server's IP address
 WiFiClient client;                  // The client (our) socket
 IPAddress ip;                     // The IP address of the shield
 IPAddress subnet;                 // The IP address of the shield
@@ -67,6 +68,8 @@ byte mac[6];                       // Wifi shield MAC address
 int delayValue = 500;
 Servo EntryGateServo;
 Servo ExitGateServo;
+char entryID[11] = "0000000000";
+char exitID[11] = "0000000001";
 
 // ParkingStallSensor define
 #define Stall1SensorPin 30
@@ -82,6 +85,10 @@ char stall1[11] = "0000000002";
 char stall2[11] = "0000000003";
 char stall3[11] = "0000000004";
 char stall4[11] = "0000000005";
+char leavedSpace1[2] = "a";
+char leavedSpace2[2] = "b";
+char leavedSpace3[2] = "c";
+char leavedSpace4[2] = "d";
 
 // LED test define
 #define EntryGateGreenLED 26
@@ -117,16 +124,16 @@ bool space4 = false;
 * Description:
 * The goal of the fucntion is to send status of parking lot to Local server.
 * To be specifc, status are following:
-* '1' means that the driver is in front of Entry gate.
-* '2' means that the driver is in front of Exit gate.
-* 'a' means that the driver parked on the parking space 1.
-* 'b' means that the driver parked on the parking space 2.
-* 'c' means that the driver parked on the parking space 3.
-* 'd' means that the driver parked on the parking space 4.
-* 'e' means that the driver leaved on the parking space 1.
-* 'f' means that the driver leaved on the parking space 2.
-* 'g' means that the driver leaved on the parking space 3.
-* 'h' means that the driver leaved on the parking space 4.
+* entryID ("0000000000") means that the driver is in front of Entry gate.
+* exitID ("0000000001") means that the driver is in front of Exit gate.
+* stall1 ("0000000002") means that the driver parked on the parking space 1.
+* stall2 ("0000000003") means that the driver parked on the parking space 2.
+* stall3 ("0000000004") means that the driver parked on the parking space 3.
+* stall4 ("0000000005") means that the driver parked on the parking space 4.
+* leavedSpace1 ("a") means that the driver leaved on the parking space 1.
+* leavedSpace2 ("b") means that the driver leaved on the parking space 2.
+* leavedSpace3 ("c") means that the driver leaved on the parking space 3.
+* leavedSpace1 ("d") means that the driver leaved on the parking space 4.
 ***********************************************************************/
 /* Arduino send data which are whether driver is infront of entry gate or not and on the spot or not to server */
 void sendToServer(){
@@ -142,13 +149,14 @@ void sendToServer(){
   // send protocol of whether driver is in front of enrty gate or not
   if (EntryBeamState == LOW && !entryGateB) { // if EntryBeamState is LOW the beam is broken
     Serial.println("Driver is in front of Entry gate.");
-    client.println("1");
+    client.println(entryID);
     // turn on the entry gate LED -> YELLOW for ready sign to enter the gate
     digitalWrite(EntryGateRedLED, LOW);
     digitalWrite(EntryGateGreenLED, LOW);
     recvFromServer();
-  } else if (EntryBeamState == HIGH) { // Driver enter the parking lot or nobody is in front of entry gate
+  } else if (EntryBeamState == HIGH && entryGateB) { // Driver enter the parking lot or nobody is in front of entry gate
     EntryGateServo.write(Close);
+    client.println("3");
     // turn on the exit gate LED -> RED
     digitalWrite(EntryGateRedLED, LOW);
     digitalWrite(EntryGateGreenLED, HIGH);
@@ -159,13 +167,14 @@ void sendToServer(){
   // send protocol of whether driver is in front of exit gate or not
   if (ExitBeamState == LOW && !exitGateB) { // if ExitBeamState is LOW the beam is broken
     Serial.println("Driver is in front of Exit gate.");
-    client.println("2");
+    client.println(entryID);
     // turn on the exit gate LED -> YELLOW for ready sign to leave the exit gate
     digitalWrite(ExitGateRedLED, LOW);
     digitalWrite(ExitGateGreenLED, LOW);
     recvFromServer();
-  } else if (ExitBeamState == HIGH) { // Driver out or noboday is in front of exit gate
+  } else if (ExitBeamState == HIGH && exitGateB) { // Driver out or noboday is in front of exit gate
     ExitGateServo.write(Close);
+    client.println("4");
     // turn on the exit gate LED -> RED
     digitalWrite(ExitGateRedLED, LOW);
     digitalWrite(ExitGateGreenLED, HIGH);
@@ -185,7 +194,7 @@ void sendToServer(){
     if (space1) {
       space1 = false;
       Serial.println("The driver leaved on the parking space 1.");
-      client.println("e");
+      client.println(leavedSpace1);
     }
   }
   if (Stall2SensorVal < StallSVal && !entryGateB) { // PARKING SPACE 2
@@ -199,7 +208,7 @@ void sendToServer(){
     if (space2) {
       space2 = false;
       Serial.println("The driver leaved on the parking space 2.");
-      client.println("f");
+      client.println(leavedSpace2);
     }
   }
   if (Stall3SensorVal < StallSVal && !entryGateB) { // PARKING SPACE 3
@@ -213,7 +222,7 @@ void sendToServer(){
     if (space3) {
       space3 = false;
       Serial.println("The driver leaved on the parking space 3.");
-      client.println("g");
+      client.println(leavedSpace3);
     }
   }
   if (Stall4SensorVal < StallSVal && !entryGateB) { // PARKING SPACE 4
@@ -227,7 +236,7 @@ void sendToServer(){
     if (space4) {
       space4 = false;
       Serial.println("The driver leaved on the parking space 4.");
-      client.println("h");
+      client.println(leavedSpace4);
     }
   }
 }
@@ -264,8 +273,8 @@ void recvFromServer(){
   Serial.println(c);
 
   // receiving date abot entry gate and parking space LED
-  if ((c == '3') && (EntryBeamState == LOW)) { // recv the msg which is '3' from server - open the entry gate and turn on the First LED
-    Serial.println("enter 3 and entry");
+  if ((c == '1') && (EntryBeamState == LOW)) { // recv the msg which is '3' from server - open the entry gate and turn on the First LED
+    Serial.println("enter 1 and entry");
     entryGateB = true;
     EntryGateServo.write(Open);
     delay(delayValue);
@@ -275,8 +284,8 @@ void recvFromServer(){
     delay(delayValue);
     digitalWrite(ParkingStall1LED, HIGH);
     delay(delayValue);
-  } else if ((c == '4') && (EntryBeamState == LOW)) { // recv the msg which is '4' from server - open the entry gate and turn on the Second LED
-    Serial.println("enter 4 and entry");
+  } else if ((c == '2') && (EntryBeamState == LOW)) { // recv the msg which is '4' from server - open the entry gate and turn on the Second LED
+    Serial.println("enter 2 and entry");
     entryGateB = true;
     EntryGateServo.write(Open);
     delay(delayValue);
@@ -286,8 +295,8 @@ void recvFromServer(){
     delay(delayValue);
     digitalWrite(ParkingStall2LED, HIGH);
     delay(delayValue);
-  } else if ((c == '5') && (EntryBeamState == LOW)) { // recv the msg which is '5' from server - open the entry gate and turn on the Third LED
-    Serial.println("enter 5 and entry");
+  } else if ((c == '3') && (EntryBeamState == LOW)) { // recv the msg which is '5' from server - open the entry gate and turn on the Third LED
+    Serial.println("enter 3 and entry");
     entryGateB = true;
     EntryGateServo.write(Open);
     delay(delayValue);
@@ -297,8 +306,8 @@ void recvFromServer(){
     delay(delayValue);
     digitalWrite(ParkingStall3LED, HIGH);
     delay(delayValue);
-  } else if ((c == '6') && (EntryBeamState == LOW)) { // recv the msg which is '6' from server - open the entry gate and turn on the Fourth LED
-    Serial.println("enter 6 and entry");
+  } else if ((c == '4') && (EntryBeamState == LOW)) { // recv the msg which is '6' from server - open the entry gate and turn on the Fourth LED
+    Serial.println("enter 4 and entry");
     entryGateB = true;
     EntryGateServo.write(Open);
     delay(delayValue);
@@ -393,12 +402,26 @@ void setup(){
 
   // Send client register information to localServer
   // (parkingContollerDeviceID,parkingContollerDeviceType,parkingContollerDeviceAlive,parkingContollerDeviceState,parkingContollerID)
+  /*
   client.println("0000000000,1,1,1,0000000000");
-  client.println("0000000000,2,1,1,0000000001");
-  client.println("0000000000,3,1,1,0000000002");
-  client.println("0000000000,3,1,1,0000000003");
-  client.println("0000000000,3,1,1,0000000004");
-  client.println("0000000000,3,1,1,0000000005");
+  delay(2000);
+  Serial.println("Device register complete");
+  client.println("0000000001,2,1,1,0000000000");
+  delay(2000);
+  Serial.println("Device register complete");
+  client.println("0000000002,3,1,1,0000000000");
+  delay(2000);
+  Serial.println("Device register complete");
+  client.println("0000000003,3,1,1,0000000000");
+  delay(2000);
+  Serial.println("Device register complete");
+  client.println("0000000004,3,1,1,0000000000");
+  delay(2000);
+  Serial.println("Device register complete");
+  client.println("0000000005,3,1,1,0000000000");
+  delay(2000);
+  */
+  Serial.println("Device register complete");
 }
 
 void loop(){
