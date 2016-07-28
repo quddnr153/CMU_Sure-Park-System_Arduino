@@ -225,7 +225,7 @@ void recvFromServer(){
   }
 
   Serial.print("The localserver sends the data which is ");
-  Serial.println(c+"aa");
+  Serial.println(c);
 
   // receiving date abot entry gate and parking space LED
   if ((c == '1') && (EntryBeamState == LOW)) { // recv the msg which is '3' from server - open the entry gate and turn on the First LED
