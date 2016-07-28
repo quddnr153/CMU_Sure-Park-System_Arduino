@@ -65,7 +65,7 @@ int delayValue = 500;
 int StallSensorPins[4] = {30, 31, 32, 33};
 long  StallSensorVals[4] = {0,0,0,0};
 long  StallSVal = 25;
-String stalls[4] = {"0000000006", "0000000007", "0000000008", "0000000009"};
+String stalls[4] = {"0000000005", "0000000006", "0000000007", "0000000008"};
 
 // LED test define
 #define EntryGateGreenLED 26
@@ -85,6 +85,7 @@ bool preSpaces[4] = {false,false,false,false};
 String deviceFlag[] = {"0", "1", "2"};
 
 String controllerID = "0000000001";
+String offLED = "9999999999";
 
 /*********************************************************************
 * void sendToServer()
@@ -104,7 +105,8 @@ String controllerID = "0000000001";
 /* Arduino send data which are whether driver is infront of entry gate or not and on the spot or not to server */
 void stallSensorChecking() {
   int chk = 0;
-
+  Serial.println("Got in to stallSensorChecking.");
+  stallChecking();
   for(int i = 0; i < 4; i++) {
     if (StallSensorVals[i] >= StallSVal) {
       spaces[i] = false;
@@ -114,6 +116,7 @@ void stallSensorChecking() {
   
   // Checking thet whether the driver parked righit space or not
   while((preSpaces[0] == spaces[0]) && (preSpaces[0] == spaces[0]) && (preSpaces[0] == spaces[0]) &&(preSpaces[0] == spaces[0])){
+    stallChecking();
     for (int i = 0; i < 4; i++) {
       if (StallSensorVals[i] < StallSVal) { // PARKING SPACE 1
         if (!spaces[i]) {
@@ -145,43 +148,47 @@ void stallSensorChecking() {
 * '5' is to open the exit gate
 ***********************************************************************/ 
 void recvFromServer(){
+  String command = "";
   char tmp = ' ';
-  char c = ' ';
   Serial.print("Local server send message : ");
   while (tmp != '\n') {
     if (client.available()) {
-      tmp = client.read();
-      if (('6' <= tmp) && (tmp <= '9')) {
-        c = tmp;
+      if (tmp == '\n') {
+        
+      } else {
+        command += tmp;
       }
-      Serial.write(tmp);
     }
   }
 
-  Serial.print("The localserver sends the data which is ");
-  Serial.println(c);
+  Serial.print("The localserver sends the data which is -");
+  Serial.print(command);
+  Serial.println(".");
 
   // receiving date abot entry gate and parking space LED
-  if ((c == '6')) { // recv the msg which is '3' from server - open the entry gate and turn on the First LED
+  if (command.equals(stalls[0])) { // recv the msg which is '3' from server - open the entry gate and turn on the First LED
     Serial.println("Turn on the spot 5 LED and open the enry gate");
     digitalWrite(ParkingStall1LED, HIGH);
     delay(delayValue);
     stallSensorChecking();
-  } else if ((c == '7')) { // recv the msg which is '4' from server - open the entry gate and turn on the Second LED
+  } else if (command.equals(stalls[1])) { // recv the msg which is '4' from server - open the entry gate and turn on the Second LED
     Serial.println("Turn on the spot 6 LED and open the enry gate");
     digitalWrite(ParkingStall2LED, HIGH);
     delay(delayValue);
     stallSensorChecking();
-  } else if ((c == '8')) { // recv the msg which is '5' from server - open the entry gate and turn on the Third LED
+  } else if (command.equals(stalls[2])) { // recv the msg which is '5' from server - open the entry gate and turn on the Third LED
     Serial.println("Turn on the spot 7 LED and open the enry gate");
     digitalWrite(ParkingStall3LED, HIGH);
     delay(delayValue);
     stallSensorChecking();
-  } else if ((c == '9')) { // recv the msg which is '6' from server - open the entry gate and turn on the Fourth LED
+  } else if (command.equals(stalls[3])) { // recv the msg which is '6' from server - open the entry gate and turn on the Fourth LED
     Serial.println("Turn on the spot 8 LED and open the enry gate");
     digitalWrite(ParkingStall4LED, HIGH);
     delay(delayValue);
     stallSensorChecking();
+  }
+  if (command.equals(offLED)) {
+    turnOffParkingLEDs();
   }
 }
 

@@ -68,14 +68,15 @@ byte mac[6];                       // Wifi shield MAC address
 int delayValue = 500;
 Servo EntryGateServo;
 Servo ExitGateServo;
-String entryID = "0000000000";
-String exitID  = "0000000001";
+String entryID = "9999999998";
+String exitID  = "9999999997";
+String onlyEntry = "9999999996";
 
 // ParkingStallSensor define
 int StallSensorPins[4] = {30, 31, 32, 33};
 long  StallSensorVals[4] = {0,0,0,0};
 long  StallSVal = 25;
-String stalls[4] = {"0000000002", "0000000003", "0000000004", "0000000005"};
+String stalls[4] = {"0000000001", "0000000002", "0000000003", "0000000004"};
 
 // LED test define
 #define EntryGateGreenLED 26
@@ -96,6 +97,7 @@ int ExitBeamState;
 // entry status chk boolean, false -> no detection of any driver, true -> driver is parking or exiting
 bool entryGateB = false;
 bool exitGateB = false;
+bool entryGateB2 = true;
 
 // Parking status chk boolean, false -> unoccupied space, true -> occupied space
 bool spaces[4] = {false,false,false,false};
@@ -104,6 +106,7 @@ bool spaces[4] = {false,false,false,false};
 String deviceFlag[] = {"0", "1", "2"};
 
 String controllerID = "0000000000";
+String offLED = "9999999999";
 
 /*********************************************************************
 * void sendToServer()
@@ -129,7 +132,7 @@ void sendToServer(){
   stallChecking();
 
   // send protocol of whether driver is in front of enrty gate or not
-  if (EntryBeamState == LOW && !entryGateB) { // if EntryBeamState is LOW the beam is broken
+  if (EntryBeamState == LOW && !entryGateB && !entryGateB2) { // if EntryBeamState is LOW the beam is broken
     Serial.println("The driver is in front of the entry gate.");
     Serial.println("Wait for pushing - I AM HERE - button by the driver application.");
     client.println(deviceFlag[0] + "," + entryID);
@@ -149,8 +152,18 @@ void sendToServer(){
     digitalWrite(EntryGateGreenLED, HIGH);
     delay(delayValue);
     entryGateB = false;
+  } else if (EntryBeamState == HIGH && entryGateB2) { // Driver enter the parking lot or nobody is in front of entry gate    
+    delay(delayValue);
+    EntryGateServo.write(Close);
+    Serial.println("Close the entry gate, because the driver got into the parking lot.");
+    // turn on the exit gate LED -> RED
+    digitalWrite(EntryGateRedLED, LOW);
+    digitalWrite(EntryGateGreenLED, HIGH);
+    delay(delayValue);
+    entryGateB2 = false;
   }
 
+  
   // send protocol of whether driver is in front of exit gate or not
   if (ExitBeamState == LOW && !exitGateB) { // if ExitBeamState is LOW the beam is broken
     Serial.println("The driver is in front of the exit gate.");
@@ -211,24 +224,36 @@ void sendToServer(){
 * '5' is to open the exit gate
 ***********************************************************************/ 
 void recvFromServer(){
+  String command = "";
   char tmp = ' ';
-  char c = ' ';
   Serial.print("Local server send message : ");
   while (tmp != '\n') {
     if (client.available()) {
       tmp = client.read();
-      if (('0' <= tmp && tmp <= '5') || ('a' <= tmp && tmp <= 'd')) {
-        c = tmp;
+      if (tmp == '\n') {  
+      } else if (tmp == '\r') {
+      }else {
+        command += tmp;
       }
-      Serial.write(tmp);
     }
   }
 
-  Serial.print("The localserver sends the data which is ");
-  Serial.println(c);
-
+  Serial.print("The localserver sends the data which is - ");
+  Serial.print(command);
+  Serial.println(".");
+  
+  if (command.equals(onlyEntry) && (EntryBeamState == LOW)) {
+    Serial.println("Open the enry gate");
+    entryGateB2 = true;
+    EntryGateServo.write(Open);
+    delay(delayValue);
+    // turn on the entry gate LED -> GREEN for entering sign to enter the gate
+    digitalWrite(EntryGateRedLED, HIGH);
+    digitalWrite(EntryGateGreenLED, LOW);
+    delay(delayValue);
+  }
   // receiving date abot entry gate and parking space LED
-  if ((c == '1') && (EntryBeamState == LOW)) { // recv the msg which is '3' from server - open the entry gate and turn on the First LED
+  if (command.equals(stalls[0]) && (EntryBeamState == LOW)) { // recv the msg which is '3' from server - open the entry gate and turn on the First LED
     Serial.println("Turn on the spot 1 LED and open the enry gate");
     entryGateB = true;
     EntryGateServo.write(Open);
@@ -239,7 +264,7 @@ void recvFromServer(){
     delay(delayValue);
     digitalWrite(ParkingStall1LED, HIGH);
     delay(delayValue);
-  } else if ((c == '2') && (EntryBeamState == LOW)) { // recv the msg which is '4' from server - open the entry gate and turn on the Second LED
+  } else if (command.equals(stalls[1]) && (EntryBeamState == LOW)) { // recv the msg which is '4' from server - open the entry gate and turn on the Second LED
     Serial.println("Turn on the spot 2 LED and open the enry gate");
     entryGateB = true;
     EntryGateServo.write(Open);
@@ -250,7 +275,7 @@ void recvFromServer(){
     delay(delayValue);
     digitalWrite(ParkingStall2LED, HIGH);
     delay(delayValue);
-  } else if ((c == '3') && (EntryBeamState == LOW)) { // recv the msg which is '5' from server - open the entry gate and turn on the Third LED
+  } else if (command.equals(stalls[2]) && (EntryBeamState == LOW)) { // recv the msg which is '5' from server - open the entry gate and turn on the Third LED
     Serial.println("Turn on the spot 1 LED and open the enry gate");
     entryGateB = true;
     EntryGateServo.write(Open);
@@ -261,7 +286,7 @@ void recvFromServer(){
     delay(delayValue);
     digitalWrite(ParkingStall3LED, HIGH);
     delay(delayValue);
-  } else if ((c == '4') && (EntryBeamState == LOW)) { // recv the msg which is '6' from server - open the entry gate and turn on the Fourth LED
+  } else if (command.equals(stalls[3]) && (EntryBeamState == LOW)) { // recv the msg which is '6' from server - open the entry gate and turn on the Fourth LED
     Serial.println("Turn on the spot 1 LED and open the enry gate");
     entryGateB = true;
     EntryGateServo.write(Open);
@@ -273,9 +298,8 @@ void recvFromServer(){
     digitalWrite(ParkingStall4LED, HIGH);
     delay(delayValue);
   }
-
   // receiving date abot exit gate
-  if ((c == '0') && (ExitBeamState == LOW)) { // rect the msg which is '7' from server - open the exit gate
+  if (command.equals(exitID) && (ExitBeamState == LOW)) { // rect the msg which is '7' from server - open the exit gate
     Serial.println("The driver got the permission of the exit gate.");
     Serial.println("Open the exit gate, and payment complete.");
     exitGateB = true;
@@ -285,6 +309,9 @@ void recvFromServer(){
     digitalWrite(ExitGateRedLED, HIGH);
     digitalWrite(ExitGateGreenLED, LOW);
     delay(delayValue);
+  }
+  if (command.equals(offLED)) {
+    turnOffParkingLEDs();
   }
 }
 
