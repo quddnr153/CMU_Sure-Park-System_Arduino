@@ -43,8 +43,6 @@
  ****************************************************************/
 
 #include <Servo.h> 
-#include <Thread.h>
-#include <ThreadController.h>
 #include <SPI.h>
 #include <WiFi.h>
 

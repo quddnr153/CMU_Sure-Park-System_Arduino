@@ -4,8 +4,9 @@
  * Copyright: Copyright (c) 2016 DH1002 - "Cheony"
  * versions:
  * 1.0 July 20, 2016 - Initial version
- * 2.0 July 22, 2016 - Interim version
- * 3.0 July 26, 2016 - Interim version
+ * 1.1 July 22, 2016 - Interim version
+ * 1.2 July 26, 2016 - Interim version
+ * 2.0 July 28, 2016 - Final version
  * 
  * Description:
  * 
@@ -21,13 +22,19 @@
  * 
  * void sendToServer() - Identify EntryBeamState and ExitBeamState 
  * from IR sensors which are EntryBeamRcvr and ExitBeamRcvr.
- * Identify Stall1SensorVal, 2, 3, and 4 from illumination sensors
- * which are StallSensorPins, 30, 31, 31, and 32. It calls recvFromServer()
- * function.
+ * Identify StallSensorVals, 0000000001, 0000000002, 0000000003 
+ * and 0000000005 from illumination sensors which are StallSensorPins 
+ * 30, 31, 31, and 32. It calls recvFromServer() function.
+ * It calls 'recvFromServer()' function for receiving command from
+ * Local Sure-Park server.
  * 
- * void recvFromServer() - Receive the command date from Local sercer.
- * It works a lot of tasks which are opening the gates, and turning 
+ * void recvFromServer() - Receive the command date from Local Sure-Park 
+ * server. It works a lot of tasks which are opening the gates, and turning 
  * on the LEDs.
+ * 
+ * void setup() - Initialize the general setting of the system.
+ * 
+ * void loop() - Main loop of the system. It checks socket connection.
  * 
  * void ProximityVal(int sensorIn) - returns an integer value from
  * the QTI sensor that is an indication of the amount of light be 
@@ -40,13 +47,21 @@
  * 
  * void turnOffParkingLEDs() - It turns off all of the LEDs of 
  * the parking spaces.
+ * 
+ * void registerDevices() - It sends register data of the system to
+ * Local Sure-Park Server. For example, there are controllerID, deviceID,
+ * deviceType, and deviceAlive.
+ * 
+ * void stallChecking() - It checks parking spot information whether it is
+ * available or not for each spot.
+ * 
  ****************************************************************/
 
 #include <Servo.h> 
-#include <Thread.h>
-#include <ThreadController.h>
 #include <SPI.h>
 #include <WiFi.h>
+
+#define PRINTCOVER          "\n----------------------------------------\n"
 
 // socket define
 #define PORTID 550                 // IP socket port ID
@@ -61,52 +76,52 @@ long rssi;                         // Wifi shield signal strength
 byte mac[6];                       // Wifi shield MAC address
 
 // GateSerrvo define
-#define EntryGateServoPin 5
-#define ExitGateServoPin 6
-#define Open  90
-#define Close 0
-int delayValue = 500;
+#define EntryGateServoPin   5
+#define ExitGateServoPin    6
+#define Open                90
+#define Close               0
+int delayValue            = 500;
 Servo EntryGateServo;
 Servo ExitGateServo;
-String entryID = "9999999998";
-String exitID  = "9999999997";
-String onlyEntry = "9999999996";
+String entryID            = "9999999998";
+String exitID             = "9999999997";
+String onlyEntry          = "9999999996";
 
 // ParkingStallSensor define
-int StallSensorPins[4] = {30, 31, 32, 33};
-long  StallSensorVals[4] = {0,0,0,0};
-long  StallSVal = 25;
-String stalls[4] = {"0000000001", "0000000002", "0000000003", "0000000004"};
+int StallSensorPins[4]    = {30, 31, 32, 33};
+long  StallSensorVals[4]  = {0,0,0,0};
+long  StallSVal           = 25;
+String stalls[4]          = {"0000000001", "0000000002", "0000000003", "0000000004"};
 
 // LED test define
-#define EntryGateGreenLED 26
-#define EntryGateRedLED   27
-#define ExitGateGreenLED  28
-#define ExitGateRedLED    29
-#define ParkingStall1LED  22
-#define ParkingStall2LED  23
-#define ParkingStall3LED  24
-#define ParkingStall4LED  25
+#define EntryGateGreenLED   26
+#define EntryGateRedLED     27
+#define ExitGateGreenLED    28
+#define ExitGateRedLED      29
+#define ParkingStall1LED    22
+#define ParkingStall2LED    23
+#define ParkingStall3LED    24
+#define ParkingStall4LED    25
 
 // EntryExitBeam define
-#define EntryBeamRcvr  34 
-#define ExitBeamRcvr   35
+#define EntryBeamRcvr       34 
+#define ExitBeamRcvr        35
 int EntryBeamState;
 int ExitBeamState;
 
 // entry status chk boolean, false -> no detection of any driver, true -> driver is parking or exiting
-bool entryGateB = false;
-bool exitGateB = false;
-bool entryGateB2 = true;
+bool entryGateB           = false;
+bool exitGateB            = false;
+bool entryGateB2          = false;
 
 // Parking status chk boolean, false -> unoccupied space, true -> occupied space
-bool spaces[4] = {false,false,false,false};
+bool spaces[4]            = {false,false,false,false};
 
 // device Flag 0,1 -> state update, 2 -> spot assign
-String deviceFlag[] = {"0", "1", "2"};
+String deviceFlag[]       = {"0", "1", "2"};
 
-String controllerID = "0000000000";
-String offLED = "9999999999";
+String controllerID       = "0000000000";
+String offLED             = "9999999999";
 
 /*********************************************************************
 * void sendToServer()
@@ -123,7 +138,6 @@ String offLED = "9999999999";
 * stall3  ("0000000004") means that the driver parked on the parking space 3.
 * stall4  ("0000000005") means that the driver parked on the parking space 4.
 ***********************************************************************/
-/* Arduino send data which are whether driver is infront of entry gate or not and on the spot or not to server */
 void sendToServer(){
   EntryBeamState = digitalRead(EntryBeamRcvr);  // Here we read the state of the entry beam.
   ExitBeamState = digitalRead(ExitBeamRcvr);  // Here we read the state of the exit beam.
@@ -133,6 +147,7 @@ void sendToServer(){
 
   // send protocol of whether driver is in front of enrty gate or not
   if (EntryBeamState == LOW && !entryGateB && !entryGateB2) { // if EntryBeamState is LOW the beam is broken
+    Serial.print(PRINTCOVER);
     Serial.println("The driver is in front of the entry gate.");
     Serial.println("Wait for pushing - I AM HERE - button by the driver application.");
     client.println(deviceFlag[0] + "," + entryID);
@@ -142,6 +157,7 @@ void sendToServer(){
     digitalWrite(EntryGateGreenLED, LOW);
     recvFromServer();
   } else if (EntryBeamState == HIGH && entryGateB) { // Driver enter the parking lot or nobody is in front of entry gate
+    Serial.print(PRINTCOVER);
     delay(delayValue);
     EntryGateServo.write(Close);
     client.println(deviceFlag[1] + "," + entryID);
@@ -152,7 +168,9 @@ void sendToServer(){
     digitalWrite(EntryGateGreenLED, HIGH);
     delay(delayValue);
     entryGateB = false;
+    Serial.print(PRINTCOVER);
   } else if (EntryBeamState == HIGH && entryGateB2) { // Driver enter the parking lot or nobody is in front of entry gate    
+    Serial.print(PRINTCOVER);
     delay(delayValue);
     EntryGateServo.write(Close);
     Serial.println("Close the entry gate, because the driver got into the parking lot.");
@@ -161,11 +179,12 @@ void sendToServer(){
     digitalWrite(EntryGateGreenLED, HIGH);
     delay(delayValue);
     entryGateB2 = false;
+    Serial.print(PRINTCOVER);
   }
 
-  
   // send protocol of whether driver is in front of exit gate or not
   if (ExitBeamState == LOW && !exitGateB) { // if ExitBeamState is LOW the beam is broken
+    Serial.print(PRINTCOVER);
     Serial.println("The driver is in front of the exit gate.");
     Serial.println("Wait for pushing - I AM HERE - button by the driver application.");
     client.println(deviceFlag[0] + "," + exitID);
@@ -175,6 +194,7 @@ void sendToServer(){
     digitalWrite(ExitGateGreenLED, LOW);
     recvFromServer();
   } else if (ExitBeamState == HIGH && exitGateB) { // Driver out or noboday is in front of exit gate
+    Serial.print(PRINTCOVER);
     delay(delayValue);
     ExitGateServo.write(Close);
     client.println(deviceFlag[1] + "," + exitID);
@@ -185,10 +205,10 @@ void sendToServer(){
     digitalWrite(ExitGateGreenLED, HIGH);
     delay(delayValue);
     exitGateB = false;
+    recvFromServer();
   }
-
+  
   // Checking thet whether the driver parked righit space or not
-
   for (int i = 0; i < 4; i++) {
     if (StallSensorVals[i] < StallSVal && !entryGateB) { // PARKING SPACE 1
       if (!spaces[i]) {
@@ -217,11 +237,10 @@ void sendToServer(){
 * Description:
 * The goal of the fucntion is to receive commands from Local server.
 * To be specifc, commands are following:
-* '1' is to open the entry gate and turn on the First LED
-* '2' is to open the entry gate and turn on the Second LED
-* '3' is to open the entry gate and turn on the Third LED
-* '4' is to open the entry gate and turn on the Fourth LED
-* '5' is to open the exit gate
+* onlyEntry ("9999999998") is to open the only entry gate and other controller spot assigned. 
+* stalls array is to open the entry gate and turn on the LEDs
+* exitID ("9999999997") is to open the exit gate
+* offLED ("9999999999") is to turn off the the LEDs
 ***********************************************************************/ 
 void recvFromServer(){
   String command = "";
@@ -313,8 +332,18 @@ void recvFromServer(){
   if (command.equals(offLED)) {
     turnOffParkingLEDs();
   }
+  Serial.print(PRINTCOVER);
 }
 
+/*********************************************************************
+* void setup()
+*
+* Parameters: None           
+* 
+* Description:
+* The goal of the fucntion is to setup initial controllerDevices information.
+* Also it connects Local Sure-Park Server using socket.
+***********************************************************************/
 void setup(){
   Serial.begin(9600);
   Serial.println("Attempting to connect to network...");
@@ -327,7 +356,7 @@ void setup(){
      status = WiFi.begin(ssid);
   }
   Serial.println( "Connected to network:" );
-  Serial.println( "\n----------------------------------------" );
+  Serial.println( "\n----------------------------------------\n" );
   // Print the basic connection and network information.
   printConnectionStatus();
   Serial.println( "\n----------------------------------------\n" );
@@ -380,6 +409,15 @@ void setup(){
   Serial.println("Device register complete");
 }
 
+/*********************************************************************
+* void loop()
+*
+* Parameters: None           
+* 
+* Description:
+* The goal of the fucntion is to execute the main function for looping.
+* Also it checks the connection with Local Sure-Park Server.
+***********************************************************************/
 void loop(){
   // WiFi connection check every time
    if (client.connected()) {
@@ -391,16 +429,17 @@ void loop(){
      EntryGateServo.write(Open); 
      ExitGateServo.write(Open);  
      client.stop();
-     if(client.connect(server, PORTID)){
+   }
+   if(client.connect(server, PORTID)){
        Serial.println("The socket connection between controller and localserver is complete.");
        Serial.println("Registering the devices ....");
        EntryGateServo.write(Close); 
        ExitGateServo.write(Close); 
+       turnOffParkingLEDs();
        registerDevices();
      }else{
        // need to delay ??
      }
-   }
 }
 
 /*********************************************************************
@@ -509,6 +548,15 @@ void turnOffParkingLEDs()
   digitalWrite(ParkingStall4LED, LOW);
 }
 
+/*********************************************************************
+* void registerDevices()
+*
+* Parameters: None           
+* 
+* Description:
+* The goal of the fucntion is to register the devices which are installed
+* in the controller. The data is sent to Local Sure-Park Server.
+***********************************************************************/ 
 void registerDevices ()
 {
   String stallState[4];
@@ -536,6 +584,14 @@ void registerDevices ()
   delay(2000);
 }
 
+/*********************************************************************
+* void registerDevices()
+*
+* Parameters: None           
+* 
+* Description:
+* The goal of the fucntion is to check the each parking spot LED.
+***********************************************************************/
 void stallChecking ()
 {
   for(int i = 0; i < 4; i++){

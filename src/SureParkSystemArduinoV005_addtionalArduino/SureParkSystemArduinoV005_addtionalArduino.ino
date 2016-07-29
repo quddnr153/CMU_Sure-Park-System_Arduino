@@ -4,8 +4,9 @@
  * Copyright: Copyright (c) 2016 DH1002 - "Cheony"
  * versions:
  * 1.0 July 20, 2016 - Initial version
- * 2.0 July 22, 2016 - Interim version
- * 3.0 July 26, 2016 - Interim version
+ * 1.1 July 22, 2016 - Interim version
+ * 1.2 July 26, 2016 - Interim version
+ * 2.1 July 28, 2016 - Final of additional controller version
  * 
  * Description:
  * 
@@ -42,50 +43,50 @@
  * the parking spaces.
  ****************************************************************/
 
-#include <Thread.h>
-#include <ThreadController.h>
 #include <SPI.h>
 #include <WiFi.h>
 
-// socket define
-#define PORTID 550                 // IP socket port ID
-char ssid[] = "ASUS_Guest2";           // The network SSID for CMU unsecure network
-char c;                               // Character read from server
-int status = WL_IDLE_STATUS;         // Network connection status
-IPAddress server(192,168,1,80);    // The server's IP address
-WiFiClient client;                  // The client (our) socket
-IPAddress ip;                     // The IP address of the shield
-IPAddress subnet;                 // The IP address of the shield
-long rssi;                         // Wifi shield signal strength
-byte mac[6];                       // Wifi shield MAC address
+#define PRINTCOVER          "\n----------------------------------------\n"
 
-int delayValue = 500;
+// socket define
+#define PORTID              550                      // IP socket port ID
+char ssid[]               = "ASUS_Guest2";           // The network SSID for CMU unsecure network
+char c;                                             // Character read from server
+int status                = WL_IDLE_STATUS;         // Network connection status
+IPAddress server(192,168,1,80);                    // The server's IP address
+WiFiClient client;                                   // The client (our) socket
+IPAddress ip;                                      // The IP address of the shield
+IPAddress subnet;                                  // The IP address of the shield
+long rssi;                                          // Wifi shield signal strength
+byte mac[6];                                        // Wifi shield MAC address
+
+int delayValue            = 500;
 
 // ParkingStallSensor define
-int StallSensorPins[4] = {30, 31, 32, 33};
-long  StallSensorVals[4] = {0,0,0,0};
-long  StallSVal = 25;
-String stalls[4] = {"0000000005", "0000000006", "0000000007", "0000000008"};
+int StallSensorPins[4]    = {30, 31, 32, 33};
+long  StallSensorVals[4]  = {0,0,0,0};
+long  StallSVal           = 25;
+String stalls[4]          = {"0000000005", "0000000006", "0000000007", "0000000008"};
 
 // LED test define
-#define EntryGateGreenLED 26
-#define EntryGateRedLED   27
-#define ExitGateGreenLED  28
-#define ExitGateRedLED    29
-#define ParkingStall1LED  22
-#define ParkingStall2LED  23
-#define ParkingStall3LED  24
-#define ParkingStall4LED  25
+#define EntryGateGreenLED   26
+#define EntryGateRedLED     27
+#define ExitGateGreenLED    28
+#define ExitGateRedLED      29
+#define ParkingStall1LED    22
+#define ParkingStall2LED    23
+#define ParkingStall3LED    24
+#define ParkingStall4LED    25
 
 // Parking status chk boolean, false -> unoccupied space, true -> occupied space
-bool spaces[4] = {false,false,false,false};
-bool preSpaces[4] = {false,false,false,false};
+bool spaces[4]            = {false,false,false,false};
+bool preSpaces[4]         = {false,false,false,false};
 
 // device Flag 0,1 -> state update, 2 -> spot assign
-String deviceFlag[] = {"0", "1", "2"};
+String deviceFlag[]       = {"0", "1", "2"};
 
-String controllerID = "0000000001";
-String offLED = "9999999999";
+String controllerID       = "0000000001";
+String offLED             = "9999999999";
 
 /*********************************************************************
 * void sendToServer()
@@ -150,6 +151,7 @@ void stallSensorChecking() {
 void recvFromServer(){
   String command = "";
   char tmp = ' ';
+  Serial.print(PRINTCOVER);
   Serial.print("Local server send message : ");
   while (tmp != '\n') {
     if (client.available()) {
@@ -190,6 +192,7 @@ void recvFromServer(){
   if (command.equals(offLED)) {
     turnOffParkingLEDs();
   }
+  Serial.print(PRINTCOVER);
 }
 
 void setup(){
@@ -245,6 +248,7 @@ void loop(){
      if(client.connect(server, PORTID)){
        Serial.println("The socket connection between controller and localserver is complete.");
        Serial.println("Registering the devices ....");
+       turnOffParkingLEDs();
        registerDevices();
      }else{
        // need to delay ??
